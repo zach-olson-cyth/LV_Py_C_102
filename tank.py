@@ -1,296 +1,280 @@
 import math
-import random
 
 # =============================================================================
-#  tank.py  —  LabVIEW Python Node  |  LV_Py_C_102
+#  tank.py  —  LabVIEW Python Node  |  LV_Py_C_102  |  "LV PID" folder
 #  Function : tank_model_solve
+#  v3.0 — parameter order locked to block-diagram terminal trace (Apr 2026)
 #
-#  Physics-based liquid tank model using first-principles mass balance.
-#  Replaces the earlier FOPDT approximation with accurate valve and leak
-#  dynamics derived from the LabVIEW Plant System.vi baseline.
+#  Liquid tank simulation — first-principles mass balance.
 #
-#  Model overview
-#  ---------------
-#   Inlet  (HV-101, pump-driven) : Q_in  = process_load  (%/s) when open
-#   Outlet (HV-102, gravity)     : Q_out = drain_rate * sqrt(L/100)  (%/s)
-#   Leak   (passive, gravity)    : Q_lk  = leak_load  * sqrt(L/100)  (%/s)
+#  TERMINAL ORDER (top->bottom, Python Node left side, state_in LAST):
+#  +-----+--------------+--------------------------------------------+
+#  |  #  |  Name        |  Source in block diagram                   |
+#  +-----+--------------+--------------------------------------------+
+#  |  1  | valve_pos    | DBL constant / control  "Valve Pos"        |
+#  |  2  | dt           | DBL control             "dt"               |
+#  |  3  | output_high  | Index Array [100 0] -> index 0 -> 100.0    |
+#  |  4  | process_load | DBL constant            "Process load 25"  |
+#  |  5  | hv_101       | Boolean control         "HV-101 TF"        |
+#  |  6  | leak_load    | DBL constant            "Leak load 10"     |
+#  |  7  | initial_level| DBL constant            "Initial level 30" |
+#  |  8  | state_in     | Shift-register left terminal (init [-1.0]) |
+#  +-----+--------------+--------------------------------------------+
 #
-#   Mass balance (Euler):  L[k] = L[k-1] + dt * (Q_in - Q_out - Q_lk)
-#   Hard limits:           L clamped to [0.0, 100.0] %
+#  NOTE on Index Array:
+#    The [100 0] array constant feeds an Index Array function.
+#    Only index 0 (output_high = 100) is wired to the Python node.
+#    Index 1 (output_low = 0) is NOT connected and is NOT a parameter.
+#    Rule: only count Index Array outputs that have a wire connected.
 #
-#  Why Torricelli for outlet and leak?
-#    Torricelli’s theorem: v = Cv * sqrt(2*g*h)
-#    In %-level units this becomes Q = Q_max * sqrt(L / 100).
-#    This gives realistic nonlinear drain-rate (faster when full, slower when low)
-#    and a natural floor (Q → 0 as L → 0) that prevents negative levels without
-#    a hard clamp alone.
+#  RETURN ORDER (top->bottom, Python Node right side) — 4 outputs only:
+#  +-----+----------------+------------------------------------------+
+#  |  1  | level          | DBL  current tank level                  |
+#  |  2  | flow_sensor_in | TF   1 if HV-101 open and Q_in > 0       |
+#  |  3  | flow_sensor_out| TF   1 if valve_pos > 0 and Q_out > 0    |
+#  |  4  | state_out      | 1D DBL Array -> shift register right      |
+#  +-----+----------------+------------------------------------------+
 #
-#  Inlet is pump-driven so Q_in is constant when the valve is open.
+#  PARAMETER ORDER FROZEN once VI is wired.
+#  Append new params at END only; use _v2 suffix for restructuring.
 #
-#  PARAMETER ORDER IS LOCKED to the LabVIEW block-diagram terminal order.
-#  Do NOT reorder parameters once the VI is wired.
-#  Append new parameters at END only; create a _v2 function for restructuring.
-#
-#  Pre-integration test:
-#    python tank.py          <- must print OVERALL: PASS before wiring to LabVIEW
+#  Pre-integration test:  python tank.py   (must print OVERALL: PASS)
 # =============================================================================
 
 
 def tank_model_solve(
-    state_in,       # list[float]  Shift-register state: [tank_level_pct]
-                    #              Init shift register to [initial_level].
-    reinitialize,   # int          1 = reset level to initial_level; 0 = run
-    process_load,   # float        HV-101 inlet flow rate (%/s at full open)
-    hv_101,         # int          Inlet  valve HV-101: 1 = open, 0 = closed
-    leak_load,      # float        Passive leak rate coefficient (%/s at 100% level)
-                    #              Actual leak = leak_load * sqrt(level / 100)
-    hv_102,         # int          Outlet valve HV-102: 1 = open, 0 = closed
-    drain_rate,     # float        HV-102 drain rate coefficient (%/s at 100% level)
-                    #              Actual drain = drain_rate * sqrt(level / 100)
-    initial_level,  # float        Initial tank level (%)
-    sensor_noise,   # float        Peak sensor noise amplitude (%)
-    dt              # float        Sample interval (s).  Must be > 0.
+    valve_pos,       # float        HV-102 outlet drain coeff (%/s at output_high)    [t1]
+    dt,              # float        Sample interval (s)                                 [t2]
+    output_high,     # float        Max tank level — Index Array [100 0] index 0        [t3]
+    process_load,    # float        HV-101 inlet flow rate (%/s, pump-driven constant)  [t4]
+    hv_101,          # int          Inlet valve HV-101: 1 = open, 0 = closed            [t5]
+    leak_load,       # float        Passive leak coeff (%/s at output_high, Torricelli) [t6]
+    initial_level,   # float        Starting level (same units as output_high)          [t7]
+    state_in,        # list[float]  Shift-register state: [level]  LAST terminal        [t8]
+                     #              *** Init LabVIEW shift register to [-1.0] ***
+                     #              state_in[0] < 0 triggers first-call initialisation
 ):
     """
-    Physics-based liquid tank model for the LabVIEW Python Node.
+    Physics-based tank model for the LabVIEW Python Node.
 
-    Derived from the Plant System.vi baseline (LV PID / subVIs) but replaces
-    the FOPDT transfer-function approximation with a true mass-balance ODE
-    integrated with forward Euler.
+    Terminal / parameter order is LOCKED to the LV PID block diagram.
+    See module header table for the exact wire-trace mapping.
 
-    Two controllable valves
-    -----------------------
-    HV-101 (inlet)  — pump-driven: constant Q_in when open
-    HV-102 (outlet) — gravity:     Q_out = drain_rate  * sqrt(level / 100)
+    Model physics
+    -------------
+    HV-101 inlet  (pump-driven)  : Q_in   = process_load           when hv_101 = 1
+    HV-102 outlet (gravity)      : Q_out  = valve_pos  * sqrt(L / output_high)
+    Passive leak  (gravity)      : Q_leak = leak_load  * sqrt(L / output_high)
 
-    Passive leak
-    ------------
-    Always active.  Gravity-driven: Q_leak = leak_load * sqrt(level / 100)
-    Models a small orifice, crack, or weep hole in the tank wall.
-    At 100% level  : Q_leak = leak_load  (maximum)
-    At   0% level  : Q_leak = 0          (no head, no flow)
+    Euler integration:
+        dL/dt  = Q_in - Q_out - Q_leak
+        L[k]   = L[k-1] + dt * dL/dt
+        L clamped to [0, output_high]
 
-    Inputs (positional, in block-diagram terminal order)
-    -------------------------------------------------------
-    state_in       list[float]  [level_pct] — length-1 list
-    reinitialize   int          1 = reset; 0 = run from state_in
-    process_load   float        Inlet flow coefficient (%/s)       [terminal 3]
-    hv_101         int          1 = inlet  valve open              [terminal 4]
-    leak_load      float        Leak coefficient (%/s at 100%)     [terminal 5]
-    hv_102         int          1 = outlet valve open              [terminal 6]
-    drain_rate     float        Drain coefficient (%/s at 100%)    [terminal 7]
-    initial_level  float        Starting level (%)                 [terminal 8]
-    sensor_noise   float        Sensor noise amplitude (%)         [terminal 9]
-    dt             float        Sample time (s)                    [terminal 10]
+    First-call initialization (no reinitialize boolean needed)
+    ----------------------------------------------------------
+    Set the LabVIEW shift register left-terminal constant to [-1.0].
+    On the first iteration state_in[0] < 0, so Python resets level
+    to initial_level automatically.  All subsequent calls use the
+    fed-back state value.
 
-    Returns  (tuple — 4 elements)
-    -------------------------------------------------------
-    tank_level       float        Measured level with sensor noise (%)
-    flow_sensor_in   int          1 if HV-101 open and Q_in  > 0; else 0
-    flow_sensor_out  int          1 if HV-102 open and Q_out > 0; else 0
-    state_out        list[float]  Updated state [new_level_pct] — wire to shift reg
+    Inputs (positional, block-diagram terminal order, state_in LAST)
+    -----------------------------------------------------------------
+    valve_pos      float        HV-102 drain coeff (%/s at output_high)   [t1]
+    dt             float        Sample interval (s)                        [t2]
+    output_high    float        Max tank level (from Index Array index 0)  [t3]
+    process_load   float        HV-101 inlet flow rate (%/s)               [t4]
+    hv_101         int          1 = inlet valve open                       [t5]
+    leak_load      float        Passive leak coeff (%/s at output_high)    [t6]
+    initial_level  float        Starting level                             [t7]
+    state_in       list[float]  [level] shift register -- LAST             [t8]
+
+    Returns (tuple, 4 elements -- matches right-side terminal order)
+    ----------------------------------------------------------------
+    level           float        Current tank level
+    flow_sensor_in  int          1 if HV-101 open and Q_in > 0; else 0
+    flow_sensor_out int          1 if valve_pos > 0 and Q_out > 0; else 0
+    state_out       list[float]  [level] -- wire to shift-register right terminal
     """
     # ------------------------------------------------------------------
-    # 1. Sanitise scalars
+    # 1. Sanitise inputs
     # ------------------------------------------------------------------
-    dt_s   = max(float(dt), 1e-6)          # guard against zero or negative dt
-    L0     = float(initial_level)
-    sn     = float(sensor_noise)
-    ql_max = max(float(leak_load),  0.0)   # leak coeff cannot be negative
-    qd_max = max(float(drain_rate), 0.0)   # drain coeff cannot be negative
-    qi_max = max(float(process_load), 0.0) # inlet flow cannot be negative
+    dt_s = max(float(dt), 1e-6)
+    oh   = max(float(output_high), 1e-6)     # prevent divide-by-zero
+    vp   = max(float(valve_pos),    0.0)
+    qi   = max(float(process_load), 0.0)
+    ql   = max(float(leak_load),    0.0)
+    L0   = float(initial_level)
 
     # ------------------------------------------------------------------
-    # 2. Restore or reinitialise state
-    #    State vector is length-1: [tank_level_%]
+    # 2. First-call detection via sentinel
+    #    Shift register must be initialised to [-1.0] in LabVIEW.
+    #    Any negative state_in[0] resets level to initial_level.
     # ------------------------------------------------------------------
-    if int(reinitialize) or len(state_in) < 1:
+    if len(state_in) < 1 or float(state_in[0]) < 0.0:
         level = L0
     else:
-        level = max(0.0, min(100.0, float(state_in[0])))
+        level = max(0.0, min(oh, float(state_in[0])))
 
     # ------------------------------------------------------------------
-    # 3. Torricelli helper
-    #    sqrt_head = sqrt(level / 100) — range [0, 1]
-    #    Represents normalised hydraulic head driving gravity flows.
+    # 3. Torricelli head factor   sqrt(L / output_high)  in [0, 1]
+    #    Gravity-driven flows scale with hydraulic head.
     # ------------------------------------------------------------------
-    sqrt_head = math.sqrt(max(level, 0.0) / 100.0)
+    sqrt_head = math.sqrt(max(level, 0.0) / oh)
 
     # ------------------------------------------------------------------
-    # 4. Case structure: HV-101 inlet valve (pump-driven, constant Q)
-    #
-    #    TRUE  (hv_101 == 1): valve open  — constant inflow
-    #    FALSE (hv_101 == 0): valve closed — no inflow
+    # 4. Case structure -- HV-101 inlet valve (pump-driven, constant Q)
+    #    TRUE  : valve open  -- constant inflow Q_in = process_load
+    #    FALSE : valve closed -- no inflow
     # ------------------------------------------------------------------
     if int(hv_101):
-        Q_in           = qi_max        # %/s, constant (pump-driven)
+        Q_in           = qi
         flow_sensor_in = 1
     else:
         Q_in           = 0.0
         flow_sensor_in = 0
 
     # ------------------------------------------------------------------
-    # 5. Case structure: HV-102 outlet valve (gravity-driven, Torricelli)
-    #
-    #    TRUE  (hv_102 == 1): valve open  — Q_out = drain_rate * sqrt(L/100)
-    #    FALSE (hv_102 == 0): valve closed — no outlet flow
+    # 5. HV-102 outlet valve (gravity-driven, Torricelli)
+    #    valve_pos is the drain coefficient in %/s at output_high level.
+    #    Q_out = valve_pos * sqrt(level / output_high)
     # ------------------------------------------------------------------
-    if int(hv_102):
-        Q_out           = qd_max * sqrt_head   # %/s, decreases as level drops
-        flow_sensor_out = 1 if Q_out > 0.0 else 0
-    else:
-        Q_out           = 0.0
-        flow_sensor_out = 0
+    Q_out           = vp * sqrt_head
+    flow_sensor_out = 1 if Q_out > 0.0 else 0
 
     # ------------------------------------------------------------------
-    # 6. Passive leak — always active, gravity-driven (Torricelli)
-    #    Q_leak = leak_load * sqrt(level / 100)
-    #    Naturally goes to zero as the tank empties.
+    # 6. Passive leak -- always active, gravity-driven (Torricelli)
+    #    Q_leak = leak_load * sqrt(level / output_high)
     # ------------------------------------------------------------------
-    Q_leak = ql_max * sqrt_head
+    Q_leak = ql * sqrt_head
 
     # ------------------------------------------------------------------
-    # 7. Mass balance Euler integration
-    #    dL/dt = Q_in - Q_out - Q_leak
-    #    L[k] = L[k-1] + dt * dL_dt
+    # 7. Euler mass balance and hard level clamp
     # ------------------------------------------------------------------
-    dL_dt     = Q_in - Q_out - Q_leak
-    new_level = level + dt_s * dL_dt
+    new_level = level + dt_s * (Q_in - Q_out - Q_leak)
+    new_level = max(0.0, min(oh, new_level))
 
     # ------------------------------------------------------------------
-    # 8. Hard tank limits — clamp to [0, 100] %
-    #    The Torricelli model already soft-limits draining to zero,
-    #    but the pump fill can still overflow without this clamp.
+    # 8. Return -- order matches Python Node right-side terminal order
     # ------------------------------------------------------------------
-    new_level = max(0.0, min(100.0, new_level))
-
-    # ------------------------------------------------------------------
-    # 9. Sensor noise on measured output
-    # ------------------------------------------------------------------
-    noise_s        = sn * (2.0 * random.random() - 1.0) if sn > 0.0 else 0.0
-    measured_level = max(0.0, min(100.0, new_level + noise_s))
-
-    # ------------------------------------------------------------------
-    # 10. Pack updated state for shift register
-    # ------------------------------------------------------------------
-    state_out = [new_level]
-
-    return (float(measured_level), int(flow_sensor_in), int(flow_sensor_out), state_out)
+    return (
+        float(new_level),       # 1  level
+        int(flow_sensor_in),    # 2  flow_sensor_in
+        int(flow_sensor_out),   # 3  flow_sensor_out
+        [new_level],            # 4  state_out  (list[float] -> shift register)
+    )
 
 
 # =============================================================================
 #  Standalone smoke test
-#  Run: python tank.py
-#  All steps must print PASS before wiring into LabVIEW.
+#  Run:  python tank.py
+#  All steps must print PASS and final line must read OVERALL: PASS
+#  before wiring into LabVIEW.
 # =============================================================================
 if __name__ == "__main__":
     import sys
 
     _PASS_ALL = True
 
-    def _chk(label, condition, detail=None):
+    def _chk(label, cond, detail=None):
         global _PASS_ALL
-        tag = "PASS" if condition else "FAIL"
-        if not condition:
+        if not cond:
             _PASS_ALL = False
-        suffix = f"  (got: {detail})" if (detail is not None and not condition) else ""
-        print(f"  {tag}: {label}{suffix}")
+        tag = "PASS" if cond else "FAIL"
+        sfx = f"  (got: {detail})" if detail is not None and not cond else ""
+        print(f"  {tag}: {label}{sfx}")
 
-    # Default parameters matching Plant System.vi front-panel values
-    _proc  = 25.0   # HV-101 inlet flow  (%/s)
-    _leak  =  5.0   # passive leak coeff (%/s at 100 %)
-    _drain = 30.0   # HV-102 drain coeff (%/s at 100 %)
-    _L0    = 30.0   # initial level (%)
-    _sn    =  0.0   # sensor noise (off for deterministic tests)
-    _dt    =  0.1   # 100 ms sample time
+    # Block-diagram default values
+    _VP   = 30.0    # valve_pos    -- HV-102 drain coeff  (%/s at 100 %)
+    _DT   =  0.1    # dt           -- 100 ms sample time
+    _OH   = 100.0   # output_high  -- from [100 0] index 0
+    _PL   = 25.0    # process_load -- inlet flow
+    _LL   =  5.0    # leak_load
+    _L0   = 30.0    # initial_level
+    _SENT = [-1.0]  # shift-register sentinel (LabVIEW init value)
 
-    def _run(state, reinit, hv1, hv2,
-             proc=_proc, leak=_leak, drain=_drain,
-             L0=_L0, sn=_sn, dt=_dt):
-        return tank_model_solve(
-            state, reinit, proc, hv1, leak, hv2, drain, L0, sn, dt
-        )
+    def _run(state, hv1, vp=_VP, dt=_DT, oh=_OH, pl=_PL, ll=_LL, L0=_L0):
+        """Convenience wrapper preserving block-diagram terminal order."""
+        return tank_model_solve(vp, dt, oh, pl, hv1, ll, L0, state)
 
-    print("=" * 64)
-    print("tank_model_solve (physics model) — smoke test (6 steps)")
-    print("=" * 64)
-
-    # ------------------------------------------------------------------
-    # Step 1: Return-type checks and reinitialize resets to initial_level
-    # ------------------------------------------------------------------
-    print("\nStep 1: return types and reinitialize")
-    lv, fi, fo, s = _run([99.0], 1, 1, 0)   # reinit forces level = _L0
-    _chk("tank_level is float",        isinstance(lv, float),  type(lv))
-    _chk("flow_sensor_in  is int",     isinstance(fi, int),    type(fi))
-    _chk("flow_sensor_out is int",     isinstance(fo, int),    type(fo))
-    _chk("state_out is list",          isinstance(s,  list),   type(s))
-    _chk("state_out length == 1",      len(s) == 1,            len(s))
-    _chk("level near initial after reinit", abs(s[0] - _L0) < 1.0, s[0])
+    print("=" * 60)
+    print("tank_model_solve v3  --  smoke test")
+    print("=" * 60)
 
     # ------------------------------------------------------------------
-    # Step 2: HV-101 open, HV-102 closed — tank fills toward 100 %
+    # Step 1: Return types and first-call sentinel initialisation
     # ------------------------------------------------------------------
-    print("\nStep 2: HV-101 open, HV-102 closed — tank fills")
-    state = [_L0]
-    for _ in range(300):                     # 30 s simulation
-        lv, fi, fo, state = _run(state, 0, 1, 0)
-    _chk("level rose above initial",   state[0] > _L0,           round(state[0], 2))
-    _chk("flow_sensor_in  == 1",       fi == 1,                  fi)
-    _chk("flow_sensor_out == 0",       fo == 0,                  fo)
+    print("\nStep 1: return types and first-call init via sentinel")
+    lv, fi, fo, so = _run(_SENT, 0)
+    _chk("level is float",            isinstance(lv, float), type(lv))
+    _chk("flow_sensor_in  is int",     isinstance(fi, int),   type(fi))
+    _chk("flow_sensor_out is int",     isinstance(fo, int),   type(fo))
+    _chk("state_out is list",          isinstance(so, list),  type(so))
+    _chk("state_out length == 1",      len(so) == 1,          len(so))
+    _chk("sentinel init -> initial_level", abs(lv - _L0) < 0.5, round(lv, 3))
 
     # ------------------------------------------------------------------
-    # Step 3: HV-101 closed, HV-102 open — gravity drain from 80 %
+    # Step 2: HV-101 open, valve_pos=0 -- tank fills toward output_high
     # ------------------------------------------------------------------
-    print("\nStep 3: HV-101 closed, HV-102 open — tank drains")
-    state = [80.0]
+    print("\nStep 2: HV-101 open, valve_pos=0 -- tank fills")
+    s = [_L0]
     for _ in range(200):
-        lv, fi, fo, state = _run(state, 0, 0, 1)
-    _chk("level dropped below 80 %",   state[0] < 80.0,          round(state[0], 2))
-    _chk("flow_sensor_in  == 0",       fi == 0,                  fi)
+        lv, fi, fo, s = _run(s, 1, vp=0.0)
+    _chk("level rose above initial",   s[0] > _L0,  round(s[0], 2))
+    _chk("flow_sensor_in  == 1",        fi == 1,      fi)
+    _chk("flow_sensor_out == 0",        fo == 0,      fo)
 
     # ------------------------------------------------------------------
-    # Step 4: Both valves closed — only passive leak drains tank
+    # Step 3: HV-101 closed, valve_pos>0 -- tank drains
     # ------------------------------------------------------------------
-    print("\nStep 4: both valves closed — leak drains tank slowly")
-    state = [60.0]
-    start_level = state[0]
+    print("\nStep 3: HV-101 closed, valve_pos=30 -- tank drains")
+    s = [80.0]
+    for _ in range(200):
+        lv, fi, fo, s = _run(s, 0)
+    _chk("level dropped below 80",     s[0] < 80.0, round(s[0], 2))
+    _chk("flow_sensor_in  == 0",        fi == 0,      fi)
+
+    # ------------------------------------------------------------------
+    # Step 4: Both off -- only passive leak drains
+    # ------------------------------------------------------------------
+    print("\nStep 4: both off -- passive leak only")
+    s = [60.0]; start = s[0]
     for _ in range(100):
-        lv, fi, fo, state = _run(state, 0, 0, 0)
-    _chk("level dropped due to leak",  state[0] < start_level,   round(state[0], 2))
-    _chk("flow_sensor_in  == 0",       fi == 0,                  fi)
-    _chk("flow_sensor_out == 0",       fo == 0,                  fo)
+        lv, fi, fo, s = _run(s, 0, vp=0.0)
+    _chk("level dropped due to leak",  s[0] < start, round(s[0], 2))
+    _chk("flow_sensor_in  == 0",        fi == 0,       fi)
+    _chk("flow_sensor_out == 0",        fo == 0,       fo)
 
     # ------------------------------------------------------------------
-    # Step 5: Level approaches nonlinear steady state
-    #   SS condition (both valves open):
-    #     Q_in = (drain_rate + leak_load) * sqrt(L_ss/100)
-    #     L_ss = 100 * (Q_in / (drain_rate + leak_load))^2
+    # Step 5: Steady-state with both open
+    #   Q_in = (valve_pos + leak_load) * sqrt(L_ss / output_high)
+    #   L_ss = output_high * (process_load / (valve_pos + leak_load))^2
     # ------------------------------------------------------------------
-    print("\nStep 5: steady state with both valves open")
-    L_ss_theory = 100.0 * (_proc / (_drain + _leak)) ** 2
-    state = [_L0]
-    for _ in range(3000):                    # 300 s — long enough to converge
-        _, _, _, state = _run(state, 0, 1, 1)
-    _chk("level near theoretical SS (within 3 %)",
-         abs(state[0] - L_ss_theory) < 3.0,
-         f"got={round(state[0],2)}  theory={round(L_ss_theory,2)}")
+    print("\nStep 5: steady-state with both open")
+    L_ss = _OH * (_PL / (_VP + _LL)) ** 2
+    s = [_L0]
+    for _ in range(5000):
+        _, _, _, s = _run(s, 1)
+    _chk(f"level near theory {round(L_ss, 1)} % (within 3)",
+         abs(s[0] - L_ss) < 3.0,
+         f"got={round(s[0], 2)}  theory={round(L_ss, 2)}")
 
     # ------------------------------------------------------------------
-    # Step 6: Level clamped — cannot exceed 100 % or go below 0 %
+    # Step 6: Hard level limits [0, output_high]
     # ------------------------------------------------------------------
-    print("\nStep 6: hard level limits [0, 100] %")
-    state = [99.0]
+    print("\nStep 6: hard level limits [0, output_high]")
+    s = [99.0]
     for _ in range(500):
-        lv_hi, _, _, state = _run(state, 0, 1, 0, leak=0.0, drain=0.0)
-    _chk("level does not exceed 100 %", state[0] <= 100.0, round(state[0], 4))
-    state = [1.0]
+        lv, _, _, s = _run(s, 1, vp=0.0, ll=0.0)
+    _chk("level does not exceed output_high", s[0] <= _OH, round(s[0], 4))
+
+    s = [1.0]
     for _ in range(500):
-        lv_lo, _, _, state = _run(state, 0, 0, 1)
-    _chk("level does not go below 0 %",  state[0] >= 0.0,  round(state[0], 4))
+        lv, _, _, s = _run(s, 0, vp=_VP)
+    _chk("level does not go below 0",          s[0] >= 0.0, round(s[0], 4))
 
     print()
-    print("=" * 64)
-    overall = "PASS" if _PASS_ALL else "FAIL"
-    print(f"OVERALL: {overall}")
-    print("=" * 64)
+    print("=" * 60)
+    print(f"OVERALL: {'PASS' if _PASS_ALL else 'FAIL'}")
+    print("=" * 60)
     sys.exit(0 if _PASS_ALL else 1)
