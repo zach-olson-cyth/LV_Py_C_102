@@ -12,6 +12,7 @@
 		<Property Name="server.vi.callsEnabled" Type="Bool">true</Property>
 		<Property Name="server.vi.propertiesEnabled" Type="Bool">true</Property>
 		<Property Name="specify.custom.address" Type="Bool">false</Property>
+		<Item Name="Simulation - Tank Level Win SW demo2.vi" Type="VI" URL="../RT/Simulation - Tank Level Win SW demo2.vi"/>
 		<Item Name="Simulation - Tank Level.vi" Type="VI" URL="../Simulation - Tank Level.vi"/>
 		<Item Name="Dependencies" Type="Dependencies"/>
 		<Item Name="Build Specifications" Type="Build"/>
@@ -133,6 +134,7 @@ AddOutputFilter chunkFilter
 			</Item>
 		</Item>
 		<Item Name="Simulation - Tank Level RT.vi" Type="VI" URL="../RT/Simulation - Tank Level RT.vi"/>
+		<Item Name="Simulation - Windows plant only.vi" Type="VI" URL="../RT/Simulation - Windows plant only.vi"/>
 		<Item Name="Dependencies" Type="Dependencies"/>
 		<Item Name="Build Specifications" Type="Build"/>
 	</Item>
