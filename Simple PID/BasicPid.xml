@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!-- National Instruments recommends that you do not change this CLIP declaration file outside of the Configure Component-Level IP wizard. You can modify this declaration file on the Component-Level IP page of the FPGA Target Properties dialog box. -->
+
+
+
+<CLIPDeclaration Name="BasicPid">
+  <FormatVersion>4.3</FormatVersion>
+  <Description>Basic PID Controller</Description>
+ 	<TopLevelEntityAndArchitecture>
+		  <SynthesisModel>
+			   <Entity>BasicPid</Entity>
+			   <Architecture>RTL</Architecture>
+		  </SynthesisModel>
+  
+ 	</TopLevelEntityAndArchitecture>
+  
+  <SupportedDeviceFamilies>Unlimited</SupportedDeviceFamilies>
+  
+  <InterfaceList>
+    <Interface Name="LabVIEW">
+      <InterfaceType>LabVIEW</InterfaceType>
+      <SignalList>
+        <Signal Name="Clk">
+          <HDLName>Clk</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>clock</SignalType>
+          <Description/>
+          <DataType>
+            <Boolean/>
+  </DataType>
+  
+          <FreqInHertz>
+            <Max>40.000000M</Max>
+            <Min>1.000000M</Min>
+</FreqInHertz>
+
+</Signal>
+        <Signal Name="Ce">
+          <HDLName>Ce</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <Description/>
+          <DataType>
+            <Boolean/>
+  </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop></Signal>
+        <Signal Name="aReset">
+          <HDLName>aReset</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <Description/>
+          <DataType>
+            <Boolean/>
+  </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop></Signal>
+        <Signal Name="Setpoint">
+          <HDLName>Setpoint</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <Description/>
+          <DataType>
+            <FXP>
+              <WordLength>32</WordLength>
+              <IntegerWordLength>16</IntegerWordLength>
+  
+</FXP>
+  </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop></Signal>
+        <Signal Name="ProcessVariable">
+          <HDLName>ProcessVariable</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <Description/>
+          <DataType>
+            <FXP>
+              <WordLength>32</WordLength>
+              <IntegerWordLength>16</IntegerWordLength>
+  
+</FXP>
+  </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop></Signal>
+        <Signal Name="ProportionalGainKp">
+          <HDLName>ProportionalGainKp</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <Description/>
+          <DataType>
+            <FXP>
+              <WordLength>32</WordLength>
+              <IntegerWordLength>8</IntegerWordLength>
+  
+</FXP>
+  </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop></Signal>
+        <Signal Name="Output">
+          <HDLName>Output</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>FromCLIP</Direction>
+          <SignalType>data</SignalType>
+          <Description/>
+          <DataType>
+            <FXP>
+              <WordLength>32</WordLength>
+              <IntegerWordLength>16</IntegerWordLength>
+  
+</FXP>
+  </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop></Signal>
+      </SignalList>
+    </Interface>
+  </InterfaceList>
+  <ImplementationList>
+    <Path Name="BasicPid.vhd">
+      <TopLevel/>
+      <MD5>b0eafec47cce41864dcb3d92a0f7f460</MD5>
+      <SimulationFileList>
+        <SimulationModelType>Exclude from simulation model</SimulationModelType>
+    </SimulationFileList>
+   
+</Path>
+</ImplementationList>
+  <NumberOfDCMsNeeded>0</NumberOfDCMsNeeded>
+  <NumberOfMMCMsNeeded>0</NumberOfMMCMsNeeded>
+  <NumberOfBufGsNeeded>0</NumberOfBufGsNeeded>
+  
+
+
+</CLIPDeclaration>

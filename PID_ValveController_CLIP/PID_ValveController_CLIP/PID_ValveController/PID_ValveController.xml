@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  PID_ValveController.xml  —  NI LabVIEW FPGA CLIP Declaration
+  Format: CLIPDeclaration v4.2 (compatible with LV FPGA 2014+)
+  Reference: ni.com/docs/en-US/bundle/labview-fpga-module/page/defining-the-ip-interface-fpga-module.html
+
+  IMPORTANT — Alpha = NaN on front panel:
+    NaN has no FXP encoding. Wire a numeric constant FXP<+/-,32,2>=0.0
+    (bit pattern 0x00000000) to the alpha CLIP terminal.
+    alpha=0 disables D-term filtering (D passes raw).
+-->
+<CLIPDeclaration Name="PID_ValveController">
+  <FormatVersion>4.2</FormatVersion>
+  <Description>Fixed-Point 2-DOF PID for valve flow control. 5-stage pipeline, 40 MHz Kintex-7. Anti-windup, bumpless transfer. Alpha NaN = wire 0x00000000.</Description>
+  <SupportedDeviceFamilies>Unlimited</SupportedDeviceFamilies>
+
+  <TopLevelEntityAndArchitecture>
+    <SynthesisModel>
+      <Entity>PID_ValveController</Entity>
+      <Architecture>RTL</Architecture>
+    </SynthesisModel>
+  </TopLevelEntityAndArchitecture>
+
+  <InterfaceList>
+    <Interface Name="LabVIEW">
+      <InterfaceType>LabVIEW</InterfaceType>
+      <SignalList>
+
+        <!-- ═══ CLOCK ════════════════════════════════════════════════════ -->
+        <Signal Name="Clk">
+          <HDLName>Clk</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>clock</SignalType>
+          <FreqInHertz><Max>40e6</Max><Min>1e6</Min></FreqInHertz>
+        </Signal>
+
+        <!-- ═══ RESET ════════════════════════════════════════════════════ -->
+        <Signal Name="aReset">
+          <HDLName>aReset</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>reset</SignalType>
+        </Signal>
+
+        <!-- ═══ PROCESS VALUES  FXP<+/-,32,16>  LSB=1.53e-5  range=±32767 -->
+        <Signal Name="setpoint">
+          <HDLName>Setpoint</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="process variable">
+          <HDLName>ProcessVariable</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="setpoint high">
+          <HDLName>SetpointHigh</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="setpoint low">
+          <HDLName>SetpointLow</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="output high">
+          <HDLName>OutputHigh</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="output low">
+          <HDLName>OutputLow</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="manual control">
+          <HDLName>ManualControl</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <!-- ═══ TIME CONSTANTS  FXP<+/-,32,16> ═════════════════════════ -->
+        <Signal Name="integral time (Ti, min)">
+          <HDLName>IntegralTimeTiMin</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="derivative time (Td, min)">
+          <HDLName>DerivativeTimeTdMin</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <!-- ═══ GAINS / DT  FXP<+/-,32,8>  LSB=5.96e-8  range=±127 ═══ -->
+        <Signal Name="proportional gain (Kc)">
+          <HDLName>ProportionalGainKc</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>8</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="dt (s)">
+          <HDLName>DtS</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>8</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <!-- ═══ BOOLEANS ═════════════════════════════════════════════════ -->
+        <Signal Name="auto? (T)">
+          <HDLName>AutoMode</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><Boolean/></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="reinitialize? (F)">
+          <HDLName>Reinitialize</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><Boolean/></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <!-- ═══ 2-DOF PARAMS  FXP<+/-,32,2>  LSB=9.31e-10  range=±2 ══ -->
+        <!-- alpha NaN on FP = unconnected → wire constant 0x00000000     -->
+        <Signal Name="alpha">
+          <HDLName>Alpha</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>2</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="beta">
+          <HDLName>Beta</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>2</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="gamma">
+          <HDLName>Gamma</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>2</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="linearity">
+          <HDLName>Linearity</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>2</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <!-- ═══ OUTPUTS ═══════════════════════════════════════════════════ -->
+        <Signal Name="output">
+          <HDLName>Output</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>FromCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>16</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="dt out (s)">
+          <HDLName>DtOut</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>FromCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType><FXP><WordLength>32</WordLength><IntegerWordLength>8</IntegerWordLength></FXP></DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+      </SignalList>
+    </Interface>
+  </InterfaceList>
+
+  <!-- Path is relative to the XML file location -->
+  <ImplementationList>
+    <Path Name="./PID_ValveController.vhd">
+      <TopLevel/>
+    </Path>
+  </ImplementationList>
+
+</CLIPDeclaration>
