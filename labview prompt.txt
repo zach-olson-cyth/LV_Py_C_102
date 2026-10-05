@@ -1,0 +1,448 @@
+Create a complete LabVIEW VI that generates, plays, analyzes, and displays a selected melody.
+
+The VI must be UI-driven and use a front-panel Enum for melody selection.
+
+==================================================
+1. FRONT PANEL REQUIREMENTS
+==================================================
+
+Create the following front-panel controls and indicators:
+
+Controls:
+
+1. Melody Style Enum typedef named:
+
+   Melody Style.ctl
+
+   The Enum items must be created in this exact order:
+
+   0 - Classical
+   1 - Jazz
+   2 - Blues
+   3 - Electronic
+   4 - Folk
+
+   The Enum must use an I32-compatible underlying representation.
+
+2. Boolean control:
+
+   Play Melody
+
+3. Boolean control:
+
+   Stop
+
+4. Numeric controls for STFT configuration:
+
+   - FFT Size, default 2048
+   - Overlap, default 75 percent
+   - Window Type, if required by the selected LabVIEW analysis VI
+
+Indicators:
+
+1. Numeric indicator:
+
+   Sample Rate
+
+2. Numeric indicator:
+
+   Waveform Length
+
+3. Waveform Graph:
+
+   Melody Waveform
+
+4. Intensity Graph or waterfall-compatible display:
+
+   Melody Spectrogram
+
+5. String indicator:
+
+   Status
+
+6. Error Cluster indicator:
+
+   error out
+
+Organize the front panel so that the playback controls and melody selection are clearly separated from the waveform and spectrogram displays.
+
+==================================================
+2. PYTHON CALL PLACEHOLDER
+==================================================
+
+Create a clearly labeled block-diagram region surrounded by a visible decoration or free label:
+
+   PLACEHOLDER: PYTHON MELODY CALL
+
+Inside this region, create a placeholder for a LabVIEW Python Node call.
+
+The intended Python function interface is:
+
+   waveform, sample_rate = play_melody(melody)
+
+The input is the Melody Style Enum converted to its underlying I32 value.
+
+Use this mapping:
+
+   0 = Classical
+   1 = Jazz
+   2 = Blues
+   3 = Electronic
+   4 = Folk
+
+For the initial VI, the Python call may be replaced with placeholder logic that creates or loads a test waveform. However, the placeholder must clearly show where the Python Node will be inserted later.
+
+The placeholder region must have:
+
+- A melody input terminal
+- A waveform output represented as a 1D DBL array
+- A sample-rate output represented as an I32 or DBL
+- Clear labels for all terminals
+- Error in and error out wiring
+- A comment showing the intended Python module path and function name
+
+Use the following intended Python Node configuration:
+
+   Module: play_melody.py
+   Function: play_melody
+   Input: Melody Style Enum coerced to I32
+   Return type: Cluster containing:
+       1D DBL Array waveform
+       I32 sample_rate
+
+Do not hide the placeholder inside an Express VI or an unlabeled subVI.
+
+==================================================
+3. EVENT-DRIVEN USER INTERFACE
+==================================================
+
+Use an Event Structure inside a While Loop.
+
+The While Loop must respond to at least these events:
+
+1. Play Melody value change
+
+2. Stop value change
+
+When Play Melody changes to TRUE:
+
+- Read the selected Melody Style Enum.
+- Call the placeholder Python melody-generation region.
+- Receive the mono waveform and sample rate.
+- Display the waveform on Melody Waveform.
+- Display the sample rate on Sample Rate.
+- Display the array length on Waveform Length.
+- Compute the complete-waveform STFT.
+- Update Melody Spectrogram.
+- Play the waveform through the PC sound card.
+- Keep the application responsive if possible.
+- Do not clear or close the sound output until playback has completed.
+
+When Stop changes to TRUE:
+
+- Stop any active playback if the selected sound-output API supports stopping.
+- Close or clear sound-output resources safely.
+- Exit the While Loop.
+- Execute cleanup only once.
+
+The VI must not repeatedly regenerate or replay the melody while the Play Melody button remains TRUE. Use a latch or event-driven logic so one button press produces one playback operation.
+
+==================================================
+4. NON-EXPRESS SOUND OUTPUT REQUIREMENT
+==================================================
+
+Use only standard, non-Express sound-output VIs.
+
+Do not use Sound Output Express VI.
+
+Use the appropriate non-Express sound-output sequence, such as:
+
+1. Sound Output Configure
+
+2. Sound Output Write
+
+3. Sound Output Wait
+
+4. Sound Output Clear
+
+Use the actual VI names and connector terminals available in the installed LabVIEW version.
+
+Configure the sound output for:
+
+- Mono output
+- The returned sample rate
+- 16-bit or otherwise appropriate audio format
+- The returned waveform data converted to the required audio sample format
+
+If the sound-output Write VI requires a specific integer audio representation, explicitly scale or convert the DBL waveform to the required format. Preserve the sign and avoid clipping.
+
+Important playback sequencing requirement:
+
+Do not call Sound Output Clear immediately after Sound Output Write.
+
+The VI must wait for playback completion before clearing the sound-output reference.
+
+The required logical sequence is:
+
+   Configure
+       |
+   Write complete waveform
+       |
+   Wait for output/playback completion
+       |
+   Clear sound output
+
+Do not use asynchronous cleanup that destroys the output reference before the sound card finishes playing.
+
+If Sound Output Write must be called repeatedly in chunks, implement a producer/consumer or loop-based sequence and call Sound Output Wait only after the final chunk, according to the requirements of the installed LabVIEW sound-output API.
+
+Add error handling to every sound-output VI.
+
+==================================================
+5. STFT REQUIREMENTS
+==================================================
+
+Compute the STFT over the entire returned waveform, not only the first buffer or a small preview.
+
+Use the following default analysis settings:
+
+- Sample rate: returned by the Python call
+- FFT size: 2048 samples
+- Window: Hann window
+- Overlap: 75 percent
+- Hop size:
+
+      hop = FFT size * (1 - overlap)
+
+For a 2048-point FFT and 75 percent overlap:
+
+      hop size = 512 samples
+
+Use a consistent method to:
+
+1. Divide the full waveform into overlapping frames.
+2. Apply the selected window to each frame.
+3. Compute the FFT for each frame.
+4. Retain the positive-frequency half of the magnitude spectrum.
+5. Convert magnitude to a displayable linear or dB scale.
+6. Assemble the result into a 2D array.
+
+The spectrogram data orientation must be clearly defined.
+
+Preferred orientation:
+
+- Row index = frequency bin
+- Column index = time frame
+
+Therefore:
+
+   spectrogram[frequency bin, time frame]
+
+If the LabVIEW Intensity Graph expects the opposite orientation, transpose the array before displaying it and document that conversion.
+
+==================================================
+6. TIME AND FREQUENCY SCALING
+==================================================
+
+The spectrogram display must use physically meaningful time and frequency scaling.
+
+Do not display raw array indices as the primary axis interpretation.
+
+Calculate and document:
+
+Frequency-bin spacing:
+
+   frequency resolution = sample rate / FFT size
+
+For each frequency bin:
+
+   frequency = bin index * sample rate / FFT size
+
+For each STFT frame:
+
+   frame time = frame start sample / sample rate
+
+For a frame index m:
+
+   time[m] = m * hop size / sample rate
+
+Configure the graph or intensity graph so that:
+
+- The horizontal axis represents time in seconds.
+- The vertical axis represents frequency in Hz.
+- The time range covers the entire waveform duration.
+- The frequency range covers 0 Hz to the positive Nyquist frequency.
+- The maximum frequency is:
+
+      sample rate / 2
+
+- The axis labels explicitly state:
+  - Time (s)
+  - Frequency (Hz)
+
+If the Intensity Graph does not directly support physical axis scaling, use its origin and multiplier properties or an equivalent mapping so that graph coordinates correspond to seconds and Hz.
+
+Call out the scaling explicitly in block-diagram comments:
+
+   X axis:
+   time = frame index * hop size / sample rate
+
+   Y axis:
+   frequency = FFT bin index * sample rate / FFT size
+
+   Frequency range:
+   0 Hz to sample rate / 2
+
+Do not label the plot only as “Frame” and “Bin” unless the physical scaling is also visible.
+
+==================================================
+7. SPECTROGRAM DISPLAY REQUIREMENTS
+==================================================
+
+Display the complete time-history spectrogram using an Intensity Graph or equivalent waterfall/spectrogram display.
+
+Configure the display with:
+
+- X axis: Time (s)
+- Y axis: Frequency (Hz)
+- Color scale: magnitude or dB magnitude
+- Visible color scale legend
+- Clear graph title:
+
+   Melody Spectrogram: Frequency vs Time
+
+Use a dB conversion if practical:
+
+   magnitude_dB = 20 * log10(max(magnitude, small_positive_value))
+
+Prevent log-of-zero errors by applying a small positive floor before taking the logarithm.
+
+The display should update only after the full STFT has been calculated, unless a progressive update is intentionally implemented.
+
+==================================================
+8. DATA TYPES AND WIRING
+==================================================
+
+Use clear and compatible LabVIEW data types:
+
+- Melody Style: Enum typedef
+- Python melody input: I32 after Enum conversion if required
+- Waveform: 1D DBL array
+- Sample rate: DBL or I32, converted consistently
+- STFT result: 2D DBL array
+- Spectrogram display: 2D DBL array connected to an Intensity Graph
+- Error handling: standard LabVIEW error cluster
+
+Avoid unnecessary coercion dots.
+
+Add comments where data types are converted, especially:
+
+- Enum to I32
+- DBL waveform to sound-card sample format
+- STFT array orientation
+- Time-axis scaling
+- Frequency-axis scaling
+
+==================================================
+9. ERROR HANDLING AND CLEANUP
+==================================================
+
+Use standard error-cluster wiring through the entire VI.
+
+Handle these failure cases:
+
+- Python call failure
+- Empty waveform
+- Invalid sample rate
+- Unsupported melody selection
+- Sound-output configuration failure
+- Sound-output write failure
+- STFT calculation failure
+- Stop during playback
+
+Update the Status indicator with useful messages, such as:
+
+- Ready
+- Generating melody
+- Computing STFT
+- Playing melody
+- Playback complete
+- Error
+
+Ensure that sound-output references are cleared exactly once during cleanup.
+
+Do not clear a sound-output reference before the playback operation has completed.
+
+Use a flat or clearly structured cleanup path so that resources are released even when an error occurs.
+
+==================================================
+10. REQUIRED BLOCK-DIAGRAM DOCUMENTATION
+==================================================
+
+Add visible comments on the block diagram explaining:
+
+1. The Python call placeholder and its future function signature.
+
+2. The Enum mapping:
+
+   Classical = 0
+   Jazz = 1
+   Blues = 2
+   Electronic = 3
+   Folk = 4
+
+3. The playback order:
+
+   Configure -> Write -> Wait -> Clear
+
+4. Why Sound Output Wait is required before Sound Output Clear.
+
+5. STFT settings:
+
+   FFT size = 2048
+   Hann window
+   75 percent overlap
+   Hop size = 512 samples
+
+6. Time-axis scaling:
+
+   time = frame index * hop size / sample rate
+
+7. Frequency-axis scaling:
+
+   frequency = FFT bin index * sample rate / FFT size
+
+8. Spectrogram orientation and any required transpose.
+
+==================================================
+11. DELIVERABLE
+==================================================
+
+Create the complete VI, including:
+
+- Front-panel UI
+- Melody Style Enum typedef
+- Play Melody control
+- Stop control
+- Placeholder Python-call region
+- Placeholder waveform generation if the Python Node is not yet connected
+- Non-Express sound-card playback
+- Correct Configure -> Write -> Wait -> Clear sequencing
+- Complete-waveform STFT
+- Time-scaled and frequency-scaled spectrogram
+- Error handling
+- Status reporting
+- Block-diagram comments
+- Cleanup logic
+
+Before finalizing, verify that:
+
+- One Play Melody press produces one playback.
+- The complete waveform is displayed.
+- The complete waveform is analyzed.
+- The spectrogram covers the full 10-second time history.
+- The X axis is in seconds.
+- The Y axis is in Hz.
+- The sound output is not cleared until playback is complete.
+- The VI does not use any Sound Output Express VI.
+- The Melody Style input is an Enum with the exact specified item order.

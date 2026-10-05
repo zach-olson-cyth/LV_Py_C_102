@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<CLIPDeclaration Name="MovingAverage">
+  <FormatVersion>4.2</FormatVersion>
+  <Description>16-sample sliding-window moving average filter for 0-100% engineering signals.</Description>
+  <SupportedDeviceFamilies>Unlimited</SupportedDeviceFamilies>
+  <TopLevelEntityAndArchitecture>
+    <SynthesisModel>
+      <Entity>MovingAverage</Entity>
+      <Architecture>RTL</Architecture>
+    </SynthesisModel>
+  </TopLevelEntityAndArchitecture>
+  <InterfaceList>
+    <Interface Name="LabVIEW">
+      <InterfaceType>LabVIEW</InterfaceType>
+      <SignalList>
+
+        <Signal Name="Clk">
+          <HDLName>Clk</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>clock</SignalType>
+          <DataType>
+            <Boolean/>
+          </DataType>
+          <FreqInHertz>
+            <Max>40000000</Max>
+            <Min>1000000</Min>
+          </FreqInHertz>
+        </Signal>
+
+        <Signal Name="aReset">
+          <HDLName>aReset</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType>
+            <Boolean/>
+          </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="Ce">
+          <HDLName>Ce</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType>
+            <Boolean/>
+          </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="Data In (0-100%)">
+          <HDLName>DataIn</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType>
+            <FXP>
+              <Signed>true</Signed>
+              <WordLength>32</WordLength>
+              <IntegerWordLength>16</IntegerWordLength>
+            </FXP>
+          </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="Avg Gain (1/N)">
+          <HDLName>AvgGain</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>ToCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType>
+            <FXP>
+              <Signed>true</Signed>
+              <WordLength>32</WordLength>
+              <IntegerWordLength>8</IntegerWordLength>
+            </FXP>
+          </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="Data Out (0-100%)">
+          <HDLName>DataOut</HDLName>
+          <HDLType>std_logic_vector(31 downto 0)</HDLType>
+          <Direction>FromCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType>
+            <FXP>
+              <Signed>true</Signed>
+              <WordLength>32</WordLength>
+              <IntegerWordLength>16</IntegerWordLength>
+            </FXP>
+          </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+        <Signal Name="Overflow">
+          <HDLName>Overflow</HDLName>
+          <HDLType>std_logic</HDLType>
+          <Direction>FromCLIP</Direction>
+          <SignalType>data</SignalType>
+          <DataType>
+            <Boolean/>
+          </DataType>
+          <UseInLabVIEWSingleCycleTimedLoop>Allowed</UseInLabVIEWSingleCycleTimedLoop>
+        </Signal>
+
+      </SignalList>
+    </Interface>
+  </InterfaceList>
+  <ImplementationList>
+    <Path Name="MovingAverage.vhd">
+      <TopLevel>true</TopLevel>
+    </Path>
+  </ImplementationList>
+</CLIPDeclaration>

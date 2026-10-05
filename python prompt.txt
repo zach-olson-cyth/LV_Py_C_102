@@ -1,0 +1,37 @@
+
+
+You are an expert Python developer familiar with LabVIEW Python Node integration, digital audio waveform generation, and strict positional function interfaces.
+
+Create a complete standalone Python module named:
+
+    play_melody.py
+
+The module will be called from LabVIEW through the LabVIEW Python Node.
+
+The function input is a u32 that will be linked to a labview enum for different melody types Melody Type enum in this exact order: Classical, Jazz, Blues, Electronic, Folk
+
+
+    melody
+	
+The function output is a cluster of double type waveform and double type sample rate
+
+==================================================
+1. REQUIRED PUBLIC FUNCTION
+==================================================
+
+Implement exactly this public function:
+
+    play_melody(melody)
+
+Do not rename the function.
+Do not add required parameters.
+Do not reorder parameters.
+Do not use default argument values.
+LabVIEW will call the function positionally with exactly one input.
+
+The function input is:
+
+    melody
+
+The function must accept the LabVIEW Melody Style Enum after it has been converted to its underlying I32 value.
+
